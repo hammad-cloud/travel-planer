@@ -1,0 +1,13 @@
+# secrets
+.env
+*.env
+!.env.example
+
+# local tooling
+.venv/
+__pycache__/
+*.pyc
+.adk/
+.claude/
+CLAUDE.md
+.vscode/
