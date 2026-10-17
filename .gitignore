@@ -8,6 +8,4 @@
 __pycache__/
 *.pyc
 .adk/
-.claude/
-CLAUDE.md
 .vscode/
