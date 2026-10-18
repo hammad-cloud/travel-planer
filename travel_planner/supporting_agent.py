@@ -7,6 +7,7 @@ from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 
+from . import prompt
 from .tool import location_search, news_search
 
 # The project's .env must win over any stale GOOGLE_API_KEY set system-wide.
@@ -25,7 +26,7 @@ google_search_agent = Agent(
     name="google_search_agent",
     model=MODEL,
     description="Searches Google for up-to-date information.",
-    instruction="Answer the request using the news_search tool. Be concise and include sources.",
+    instruction=prompt.SEARCH_INSTRUCTION,
     tools=[FunctionTool(news_search)],
 )
 
@@ -33,11 +34,7 @@ news_agent = Agent(
     name="news_agent",
     model=MODEL,
     description="Finds recent news, events and travel advisories for a destination.",
-    instruction=(
-        "Find current news relevant to a traveller for the given destination: events, festivals, "
-        "weather issues, strikes, safety advisories. Use the google_search_agent tool. "
-        "Return a short bulleted list with dates."
-    ),
+    instruction=prompt.NEWS_INSTRUCTION,
     tools=[AgentTool(agent=google_search_agent)],
 )
 
@@ -45,10 +42,7 @@ places_agent = Agent(
     name="places_agent",
     model=MODEL,
     description="Finds real places to visit at a destination.",
-    instruction=(
-        "Suggest places to visit for the given destination and interests. Use the location_search "
-        "tool with specific queries (e.g. 'museums in Rome'). Return name, address and why it's worth it."
-    ),
+    instruction=prompt.PLACES_INSTRUCTION,
     tools=[FunctionTool(location_search)],
 )
 
@@ -56,10 +50,7 @@ travel_inspiration_agent = Agent(
     name="travel_inspiration_agent",
     model=MODEL,
     description="Inspires users with destination ideas, current news and places to visit.",
-    instruction=(
-        "Help the user pick and get excited about a destination. If they have none, suggest a few "
-        "based on their preferences. For a chosen destination, call news_agent for what's happening "
-        "now and places_agent for things to see, then combine both into one inspiring summary."
-    ),
+    instruction=prompt.INSPIRATION_INSTRUCTION,
     tools=[AgentTool(agent=news_agent), AgentTool(agent=places_agent)],
+    disallow_transfer_to_peers=True,
 )
