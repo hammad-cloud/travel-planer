@@ -1,7 +1,3 @@
-import json
-import urllib.parse
-import urllib.request
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -11,6 +7,8 @@ from google.adk.tools import FunctionTool
 from google.adk.tools.agent_tool import AgentTool
 from google.genai import types
 
+from .tool import location_search, news_search
+
 # The project's .env must win over any stale GOOGLE_API_KEY set system-wide.
 load_dotenv(Path(__file__).parent / ".env", override=True)
 
@@ -19,64 +17,6 @@ MODEL = Gemini(
     model="gemini-flash-lite-latest",
     retry_options=types.HttpRetryOptions(attempts=5, initial_delay=10, max_delay=60, http_status_codes=[429, 503]),
 )
-
-
-def location_search(query: str, limit: int = 5) -> dict:
-    """Finds real places (attractions, restaurants, hotels, landmarks) matching a query.
-
-    Args:
-        query: What to look for, e.g. "museums in Lisbon" or "beaches near Bali".
-        limit: Max number of places to return.
-
-    Returns:
-        A dict with a list of places, each with name, address, type, lat and lon.
-    """
-    # shortcut: free OpenStreetMap Nominatim (1 req/sec, no ratings); swap for Google Places API if you need reviews/photos.
-    url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode(
-        {"q": query, "format": "json", "limit": limit}
-    )
-    req = urllib.request.Request(url, headers={"User-Agent": "travel-planner-adk/1.0"})
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            results = json.load(resp)
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    return {
-        "status": "success",
-        "places": [
-            {
-                "name": r.get("name") or r["display_name"].split(",")[0],
-                "address": r["display_name"],
-                "type": r.get("type"),
-                "lat": r["lat"],
-                "lon": r["lon"],
-            }
-            for r in results
-        ],
-    }
-
-
-def news_search(query: str, limit: int = 8) -> dict:
-    """Searches Google News for recent articles.
-
-    Args:
-        query: What to search, e.g. "Lisbon festival" or "Bali travel advisory".
-        limit: Max number of articles to return.
-
-    Returns:
-        A dict with a list of articles, each with title, source, date and link.
-    """
-    url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": query, "hl": "en", "gl": "US", "ceid": "US:en"})
-    try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            items = ET.parse(resp).getroot().iter("item")
-            articles = [
-                {"title": i.findtext("title"), "source": i.findtext("source"), "date": i.findtext("pubDate"), "link": i.findtext("link")}
-                for _, i in zip(range(limit), items)
-            ]
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
-    return {"status": "success", "articles": articles}
 
 
 # shortcut: free-tier keys get no google_search grounding quota on Gemini 3, so this uses Google News RSS;
