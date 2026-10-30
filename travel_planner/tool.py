@@ -51,8 +51,9 @@ def news_search(query: str, limit: int = 8) -> dict:
     """
     url = "https://news.google.com/rss/search?" + urllib.parse.urlencode({"q": query, "hl": "en", "gl": "US", "ceid": "US:en"})
     try:
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            items = ET.parse(resp).getroot().iter("item")
+        # nosec: URL is a fixed https host; stdlib ET doesn't resolve external entities and expat caps entity expansion.
+        with urllib.request.urlopen(url, timeout=10) as resp:  # nosec B310
+            items = ET.parse(resp).getroot().iter("item")  # nosec B314
             articles = [
                 {"title": i.findtext("title"), "source": i.findtext("source"), "date": i.findtext("pubDate"), "link": i.findtext("link")}
                 for _, i in zip(range(limit), items)

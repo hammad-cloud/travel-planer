@@ -1,0 +1,53 @@
+# Runs on every push, one stage at a time: security -> load -> stress. A failed stage stops the later ones.
+name: tests
+
+on: push
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Static code scan (bandit, medium+ severity)
+        run: uvx bandit -r travel_planner -ll
+      - name: Known vulnerabilities in dependencies (pip-audit)
+        run: |
+          uv export --no-dev --no-emit-project > requirements.txt
+          uvx pip-audit -r requirements.txt --disable-pip
+
+  load:
+    needs: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Start API server
+        run: |
+          uv sync
+          uv run adk api_server --port 8000 &
+          timeout 120 bash -c 'until curl -sf localhost:8000/list-apps; do sleep 2; done'
+      - name: Load test (50 users, 1 min)
+        env: { MAX_FAIL_RATIO: "0.01", MAX_P95_MS: "1000" }
+        run: uvx --python 3.13 locust -f tests/locustfile.py -H http://localhost:8000 --headless -u 50 -r 10 -t 1m --html load-report.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: load-report, path: load-report.html }
+
+  stress:
+    needs: load
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Start API server
+        run: |
+          uv sync
+          uv run adk api_server --port 8000 &
+          timeout 120 bash -c 'until curl -sf localhost:8000/list-apps; do sleep 2; done'
+      - name: Stress test (ramp to 500 users, 2 min)
+        env: { MAX_FAIL_RATIO: "0.05", MAX_P95_MS: "5000" }
+        run: uvx --python 3.13 locust -f tests/locustfile.py -H http://localhost:8000 --headless -u 500 -r 25 -t 2m --html stress-report.html
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: stress-report, path: stress-report.html }
